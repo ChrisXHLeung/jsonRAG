@@ -1,0 +1,58 @@
+%%{init: {'theme':'default'}}%%
+flowchart LR
+    A[User] --> B[Auth0 Authentication]
+    B --> C["Cerbos Authorization
+Fine-grained Permissions
+on JSON Files"]
+    C --> D[Express.js Server]
+
+    subgraph "Central Core"
+        direction TB
+        E["JSON File Management
+Dashboard
+(EJS View)"]
+        
+        subgraph "File Operations"
+            direction TB
+            F["Create/Update
+            permission check"]
+            G["Read permission check"]
+            H["Delete permission check"]
+        end
+        
+        subgraph "AI RAG Analysis"
+            direction TB
+            I["Batch Process All Files
+analyze permission check"]
+            J["OpenAI Embeddings
+Memory Vector Store"]
+            K["GPT-4o RetrievalQA Chain
+Summarize Each File"]
+            L["Generate & Save
+summary_$date.json
+Report"]
+        end
+        
+        subgraph "Tech Stack & Storage"
+            direction LR
+            M["Local File System
+(storage/ directory)"]
+            N["LangChain +
+OpenAI SDK"]
+        end
+    end
+
+    D --> E
+    E --> F
+    E --> G
+    E --> H
+    E --> I
+    I --> J
+    J --> K
+    K --> L
+    F --> D
+    G --> D
+    H --> D
+    L --> D
+    D --> M
+    D --> N
