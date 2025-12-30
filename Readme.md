@@ -1,3 +1,4 @@
+```markdown
 # JSON File Manager with Cerbos Authorization & Multi-Model AI RAG Analysis
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -5,91 +6,84 @@
 
 ## Project Overview
 
-This open-source project demonstrates a production-ready approach to securing enterprise resources using the **PEP + PDP** pattern with **Cerbos** as the Policy Decision Point.
+This open-source project demonstrates a production-ready **PEP + PDP** authorization pattern using **Cerbos** as the external Policy Decision Point.
 
-It implements a hybrid authorization model:
+It implements:
 - **RBAC** via user roles from Auth0
 - **ABAC** via derived roles, resource attributes, and conditions in Cerbos policies
 
-Two categories of resources are protected:
+Protected resources:
+1. **File resources** – Individual JSON files with per-file actions (`create`, `read`, `update`, `delete`)
+2. **AI model execution resources** – A configurable multi-model RAG workflow gated by a single `analyze` action, allowing control over expensive OpenAI calls across multiple models
 
-1. **File resources** – Individual JSON files with per-file actions: `create`, `read`, `update`, `delete`
+The application is a secure JSON file manager with an integrated **multi-model Retrieval-Augmented Generation** pipeline that analyzes all accessible files and generates summary reports.
 
-2. **AI model execution resources** – A multi-model, multi-stage RAG workflow involving several OpenAI models:
-   - Dedicated embedding model (configurable via `OPENAI_EMBEDDING_MODEL`)
-   - Analysis model used in the RetrievalQA chain (configurable via `OPENAI_MODEL_ANALYSIS`)
-   - Summary generation model for final output (configurable via `OPENAI_MODEL_SUMMARY`)
-   - The entire workflow is gated by a single `analyze` action, giving administrators full control over who can execute potentially expensive or sensitive multi-model AI operations.
+## Project Structure
 
-The app starts as a simple JSON file manager and evolves into an **AI orchestration platform** that runs **multi-model Retrieval-Augmented Generation** across all stored files, producing aggregated summary reports.
+```
+/
+├── PEP/                  # Main Node.js application (Policy Enforcement Point)
+│   ├── package.json
+│   ├── index.js          # Express server
+│   ├── views/
+│   ├── storage/          # Runtime directory for uploaded JSON files
+│   ├── .env.example
+│   └── ...
+├── PDP/                  # Cerbos policy repository (Policy Decision Point)
+│   ├── policies/
+│   │   ├── resource_json_file.yaml
+│   │   └── json_file_derived_roles.yaml
+│   └── ...
+└── README.md
+```
+
+The system requires both directories to function:
+- **PEP** runs the web application
+- **PDP** contains the Cerbos policies loaded by the Cerbos server
 
 ## Key Features
 
-- Auth0-based authentication
-- Fine-grained, policy-as-code authorization via Cerbos PDP
-- Per-file permissions + global control over multi-model AI execution
-- Hybrid RBAC + ABAC with no application code changes required for new policies
-- Dashboard showing only authorized files and actions
+- Auth0 authentication
+- Fine-grained authorization via Cerbos PDP
+- Per-file permissions + protection of multi-model AI execution
+- Hybrid RBAC + ABAC
+- Dashboard with policy-filtered file list and actions
 - One-click **Multi-Model AI Batch Analysis** (requires `analyze` permission):
-  - Embeds file contents using the configured embedding model
-  - Builds an in-memory vector store with LangChain
-  - Runs RetrievalQA chain with the configured analysis model
-  - Generates final summaries using the configured summary model
-  - Saves results as a new timestamped `summary_*.json` file
-- All RAG behavior tunable via environment variables (chunk size, overlap, top-k)
+  - Configurable embedding, analysis, and summary models
+  - Tunable RAG parameters (chunk size, overlap, top-k)
+  - Generates and saves a timestamped summary report
 
-## Why This Project Matters
-
-Enterprises need to secure both traditional data and modern AI workloads. This project shows how to:
-- Treat multi-model AI pipelines as protected resources
-- Separate concerns: file access vs. AI execution
-- Optimize costs and performance by assigning different models to different stages
-- Externalize all authorization logic to Cerbos policies
-
-## Architecture Overview
-
-```
-User
-  ↓
-Auth0 Authentication
-  ↓
-Express.js (PEP)
-  ↓
-Cerbos PDP ←────────────────────────────┐
-  ↓                                      │ Evaluates roles, attributes, actions
-File Operations                          │ (including multi-model AI usage)
-  ↓                                      │
-Multi-Model RAG Pipeline                 │
-  ├─ Embedding Model                     │
-  ├─ Analysis Model (RetrievalQA)        │
-  └─ Summary Model                       │
-  ↓                                      │
-Local Storage + LangChain                │
-```
-
-## Tech Stack
-
-- Node.js + Express
-- EJS templates
-- Auth0 (`express-openid-connect`)
-- Cerbos PDP (gRPC)
-- express-fileupload
-- LangChain.js
-- OpenAI SDK (multiple configurable models)
-- Local filesystem storage
-
-## Getting Started
-
-### Prerequisites
+## Prerequisites
 
 - Node.js ≥ 18
-- Auth0 application
-- OpenAI API key
-- Running Cerbos instance
+- Docker (recommended for running Cerbos)
+- Auth0 tenant and application
+- OpenAI API key with access to your chosen models
 
-### Environment Variables
+## Auth0 Configuration (Required for Roles)
 
-Create a `.env` file based on this template:
+To pass user roles to the application, configure a **Post-Login Action** in Auth0:
+
+1. Go to **Actions > Library > Build Custom**
+2. Create a new Action with the following code:
+
+```javascript
+exports.onExecutePostLogin = async (event, api) => {
+  const namespace = 'https://your-app.example.com';  // Must match AUTH0_AUDIENCE or a custom namespace
+  if (event.authorization?.roles) {
+    api.idToken.setCustomClaim(`${namespace}/roles`, event.authorization.roles);
+    api.accessToken.setCustomClaim(`${namespace}/roles`, event.authorization.roles);
+  }
+};
+```
+
+3. Deploy the Action and add it to the **Login** flow.
+
+This ensures roles are included in the ID token and accessible to the application.
+
+## Environment Variables
+
+Copy `.env.example` to `.env` in the **PEP** directory and fill in values:
 
 ```dotenv
 # Server
@@ -103,7 +97,7 @@ AUTH0_CLIENT_SECRET=
 AUTH0_AUDIENCE=
 
 # Cerbos
-CERBOS_HOST=
+CERBOS_HOST=localhost:3593  # or your Cerbos endpoint
 
 # Session
 APP_SECRET=
@@ -130,48 +124,52 @@ RAG_TOP_K=
 #RAG_TOP_K=5
 ```
 
-### Run Cerbos (Docker)
+## Setup & Running
+
+1. **Start Cerbos server** (loads policies from PDP directory):
 
 ```bash
+cd PDP
 docker run --rm --name cerbos \
   -p 3592:3592 -p 3593:3593 \
   -v $(pwd)/policies:/policies \
-  ghcr.io/cerbos/cerbos:latest server
+  ghcr.io/cerbos/cerbos:latest server --config=/etc/cerbos/config.yaml
 ```
 
-### Install & Run
+(Adjust config if needed; default loads from `/policies`)
+
+2. **Run the application**:
 
 ```bash
-git clone https://github.com/yourusername/json-manager-cerbos-rag.git
-cd json-manager-cerbos-rag
+cd PEP
 npm install
 npm start
 ```
 
-Open http://localhost:3000
+3. Open http://localhost:3000 and log in via Auth0.
 
 ## Cerbos Policies
 
-The `policies/` directory contains examples covering:
+Policies in `PDP/policies/` demonstrate:
 - Role-based access
 - Ownership and derived roles
-- Department-based restrictions
-- Protection of the `analyze` action for multi-model AI execution
+- Department restrictions
+- Control of the `analyze` action for AI execution
 
 ## Contributing
 
-Contributions are welcome, especially:
-- Additional Cerbos policy examples
-- Persistent vector store integrations
-- Enhanced RAG configurations
-- Support for other storage backends
+Contributions welcome:
+- Enhanced Cerbos policies
+- Persistent vector stores
+- Additional RAG features
+- Storage backends
 
-Open an issue first for major changes.
+Open an issue for major changes.
 
 ## License
 
-MIT License – see the [LICENSE](LICENSE) file for details.
+MIT License – see [LICENSE](LICENSE)
 
 ---
 
-**A practical example of securing files and multi-model AI workloads with modern policy-based authorization.**
+**A complete reference for PEP/PDP authorization protecting files and multi-model AI workloads.**
