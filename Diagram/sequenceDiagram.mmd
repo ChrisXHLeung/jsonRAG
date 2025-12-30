@@ -1,0 +1,26 @@
+%%{init: {'theme':'default'}}%%
+sequenceDiagram
+    participant User as Admin User
+    participant App as Node.js App (PEP)
+    participant Auth0 as Auth0 (Identity)
+    participant Cerbos as Cerbos (PDP)
+    participant Local as Local Storage
+    participant AI as OpenAI (Mini + 4o)
+
+    User->>App: Request "Analyze" Action
+    App->>Auth0: Extract JWT Roles
+    Note over App,Cerbos: Authorization Layer
+    App->>Cerbos: checkPerm(Principal, "all_files", "analyze")
+    Cerbos-->>App: EFFECT_ALLOW (Policy Validated)
+    Note over App,AI: AI Workflow (Dual-Model RAG)
+    App->>Local: Read source JSON files
+    loop Pre-processing
+        App->>AI: Send content to gpt-4o-mini
+        AI-->>App: Return concise initial summary
+    end
+    App->>AI: Generate Embeddings (Text-Embedding-3)
+    App->>App: Build In-Memory Vector Store (LangChain)
+    App->>AI: RetrievalQAChain via gpt-4o
+    AI-->>App: Return final synthesized intelligence
+    App->>Local: Write summary_timestamp.json
+    App-->>User: Success (Dashboard Updated)

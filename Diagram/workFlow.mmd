@@ -1,0 +1,21 @@
+%%{init: {'theme':'default'}}%%
+graph LR
+    subgraph Identity & Security
+    A[Analyze Request] --> B{Auth0 Verified?}
+    B -- Yes --> C[Node.js PEP]
+    C --> D[Cerbos PDP]
+    end
+
+    subgraph Data & AI Pipeline
+    D -- Allowed --> E[Local Storage]
+    E --> F[gpt-4o-mini Processing]
+    F --> G[LangChain Vector Index]
+    G --> H[gpt-4o RAG Synthesis]
+    end
+
+    subgraph Persistence
+    H --> I[Save Summary JSON]
+    I --> J[Update UI]
+    end
+
+    D -- Denied --> K[403 Forbidden]
