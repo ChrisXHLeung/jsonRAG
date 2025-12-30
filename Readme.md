@@ -6,6 +6,7 @@
 ## Project Overview
 
 This open-source project demonstrates a production-ready **PEP + PDP** authorization pattern using **Cerbos** as the external Policy Decision Point.
+![](https://raw.githubusercontent.com/ChrisXHLeung/jsonRAG/refs/heads/main/Diagram/totalDiagram.png)
 
 It implements:
 - **RBAC** via user roles from Auth0
@@ -15,10 +16,11 @@ Protected resources:
 1. **File resources** – Individual JSON files with per-file actions (`create`, `read`, `update`, `delete`)
 2. **AI model execution resources** – A configurable multi-model RAG workflow gated by a single `analyze` action, allowing control over expensive OpenAI calls across multiple models
 
+![](https://raw.githubusercontent.com/ChrisXHLeung/jsonRAG/refs/heads/main/Diagram/workFlow.png)
 The application is a secure JSON file manager with an integrated **multi-model Retrieval-Augmented Generation** pipeline that analyzes all accessible files and generates summary reports.
 
 ## Project Structure
-
+![](https://raw.githubusercontent.com/ChrisXHLeung/jsonRAG/refs/heads/main/Diagram/sequenceDiagram.png)
 ```
 /
 ├── PEP/                  # Main Node.js application (Policy Enforcement Point)
@@ -142,7 +144,7 @@ docker run --rm --name cerbos \
 ```bash
 cd PEP
 npm install
-npm start
+node index.js
 ```
 
 3. Open http://localhost:3000 and log in via Auth0.
