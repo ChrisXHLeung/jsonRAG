@@ -1,0 +1,22 @@
+---
+apiVersion: api.cerbos.dev/v1
+derivedRoles:
+  name: json_file_derived_roles
+  definitions:
+    - name: admin
+      parentRoles: ["admin"]
+      condition:
+        match:
+          expr: "!R.id.matches('(?i)sensitive')"
+
+    - name: member
+      parentRoles: ["member"]
+      condition:
+        match:
+          expr: "!R.id.matches('(?i)sensitive')"
+
+    - name: user
+      parentRoles: ["user"]
+      condition:
+        match:
+          expr: "R.id.matches('(?i)release') && !R.id.matches('(?i)sensitive')"

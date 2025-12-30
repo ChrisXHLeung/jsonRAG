@@ -1,0 +1,34 @@
+---
+apiVersion: api.cerbos.dev/v1
+resourcePolicy:
+  version: "default"
+  resource: "json_file"
+  importDerivedRoles:
+    - json_file_derived_roles
+  rules:
+    - actions: ["read", "create", "analyze"]
+      effect: EFFECT_ALLOW
+      roles: ["admin"]
+
+    - actions: ["update", "delete"]
+      effect: EFFECT_ALLOW
+      derivedRoles: ["admin"]
+      
+    - actions: ["read"]
+      effect: EFFECT_ALLOW
+      derivedRoles: ["member"]
+
+    - actions: ["create"]
+      effect: EFFECT_ALLOW
+      derivedRoles: ["member"]
+      condition:
+        match:
+          all:
+            of:
+              - expr: now().getHours() >= 9 && now().getHours() < 17 
+              - expr: now().getDayOfWeek() > 0 && now().getDayOfWeek() < 6
+              - expr: "!request.resource.id.matches('(?i)release')"
+
+    - actions: ["read"]
+      effect: EFFECT_ALLOW
+      derivedRoles: ["user"]
