@@ -137,9 +137,8 @@ docker run --rm --name cerbos \
   ghcr.io/cerbos/cerbos:latest server --config=$(pwd)/conf.yaml
 ```
 
-(Adjust config if needed; default loads from `/policies`)
 
-2. **Run the application**:
+1. **Run the application**:
 
 ```bash
 cd PEP
