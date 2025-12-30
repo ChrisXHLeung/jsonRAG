@@ -1,0 +1,20 @@
+{
+  "name": "cerbos-rag-app",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cerbos/grpc": "^0.20.0",
+    "@langchain/community": "^0.0.1",
+    "@langchain/openai": "^0.0.14",
+    "dotenv": "^16.4.1",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "express-fileupload": "^1.4.3",
+    "express-openid-connect": "^2.17.1",
+    "langchain": "^0.1.23",
+    "openai": "^4.26.0"
+  }
+}
