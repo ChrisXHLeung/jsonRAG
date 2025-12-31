@@ -8,25 +8,13 @@ This open-source project demonstrates a production-ready **PEP + PDP** authoriza
 ![](https://raw.githubusercontent.com/ChrisXHLeung/jsonRAG/refs/heads/main/Diagram/totalDiagram.png)
 It implements:
 
-* 
-**RBAC** via user roles from Auth0. 
-
-
-* 
-**ABAC** via derived roles, resource attributes, and tenant-based conditions in Cerbos policies. 
-
-
+* **RBAC** via user roles from Auth0. 
+* **ABAC** via derived roles, resource attributes, and tenant-based conditions in Cerbos policies. 
 * **SaaS Tenant Isolation**: Automatic logical and physical isolation between organizations (e.g., `client1.com` and `client2.com`).
 
 Protected resources:
-
-1. 
-**File resources** – Individual JSON files with per-file actions (`create`, `read`, `update`, `delete`) restricted by Tenant ID. 
-
-
-2. 
-**AI model execution resources** – A multi-model RAG workflow gated by the `analyze` action, ensuring expensive OpenAI calls are only accessible to authorized tenant administrators. 
-
+1. **File resources** – Individual JSON files with per-file actions (`create`, `read`, `update`, `delete`) restricted by Tenant ID. 
+2. **AI model execution resources** – A multi-model RAG workflow gated by the `analyze` action, ensuring expensive OpenAI calls are only accessible to authorized tenant administrators. 
 ![](https://raw.githubusercontent.com/ChrisXHLeung/jsonRAG/refs/heads/main/Diagram/workFlow.png)
 
 ## Multi-Tenant Security Architecture
@@ -55,30 +43,14 @@ The system ensures that users from different organizations are strictly isolated
 └── README.md
 
 ```
-
 ## Key Features
 
-* 
-**Auth0 Multi-Tenant Auth**: Identification via email domain. 
-
-
-* 
-**SaaS Isolation**: Strict logical separation using Cerbos PDP. 
-
-
-* 
-**Hybrid RBAC + ABAC**: Roles from Auth0 combined with dynamic Cerbos attributes. 
-
-
+* **Auth0 Multi-Tenant Auth**: Identification via email domain. 
+* **SaaS Isolation**: Strict logical separation using Cerbos PDP. 
+* **Hybrid RBAC + ABAC**: Roles from Auth0 combined with dynamic Cerbos attributes. 
 * **One-click Multi-Model AI Analysis**:
 * Only processes data belonging to the current user's tenant. 
-
-
 * Generates timestamped summary reports within the tenant's secure storage. 
-
-
-
-
 
 ## Setup & Running
 
@@ -176,8 +148,6 @@ docker run -d \
   json_rag
 
 ```
-
-
 
 ## Contributing
 
