@@ -1,4 +1,3 @@
----
 apiVersion: api.cerbos.dev/v1
 resourcePolicy:
   version: "default"
@@ -8,7 +7,7 @@ resourcePolicy:
   rules:
     - actions: ["read", "create", "analyze"]
       effect: EFFECT_ALLOW
-      roles: ["admin"]
+      derivedRoles: ["admin"]
 
     - actions: ["update", "delete"]
       effect: EFFECT_ALLOW

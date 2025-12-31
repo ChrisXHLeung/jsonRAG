@@ -22,8 +22,8 @@ app.use(express.json());
 app.use(fileUpload());
 
 const cerbos = new Cerbos(process.env.CERBOS_HOST, { tls: false });
-const STORAGE_DIR = path.join(__dirname, 'storage');
-if (!fs.existsSync(STORAGE_DIR)) fs.mkdirSync(STORAGE_DIR);
+const STORAGE_ROOT = path.join(__dirname, 'storage');
+if (!fs.existsSync(STORAGE_ROOT)) fs.mkdirSync(STORAGE_ROOT);
 
 const config = {
   authRequired: false,
@@ -43,14 +43,34 @@ const config = {
 
 app.use(auth(config));
 
+function getTenantId(user) {
+  return user.email.split('@')[1];
+}
+
+function getTenantDir(tenantId) {
+  const dir = path.join(STORAGE_ROOT, tenantId);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 async function checkPerm(user, resourceId, action) {
+  const tenantId = getTenantId(user);
   const roleKey = `${process.env.AUTH0_AUDIENCE}roles`;
   const roles = user[roleKey] || user.roles || ['user'];
   const roleArray = Array.isArray(roles) ? roles : [roles];
+  
   try {
     const decision = await cerbos.checkResource({
-      principal: { id: user.sub, roles: roleArray },
-      resource: { kind: 'json_file', id: resourceId },
+      principal: { 
+        id: user.sub, 
+        roles: roleArray,
+        attr: { tenantId } 
+      },
+      resource: { 
+        kind: 'json_file', 
+        id: resourceId,
+        attr: { tenantId }
+      },
       actions: [action]
     });
     return decision.isAllowed(action);
@@ -60,12 +80,13 @@ async function checkPerm(user, resourceId, action) {
   }
 }
 
-async function runRAG(jsonFiles) {
+async function runRAG(tenantId, jsonFiles) {
+  const tenantDir = getTenantDir(tenantId);
   const embeddings = new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_KEY });
   const vectorStore = new MemoryVectorStore(embeddings);
 
   for (const file of jsonFiles) {
-    const content = fs.readFileSync(path.join(STORAGE_DIR, file), 'utf-8');
+    const content = fs.readFileSync(path.join(tenantDir, file), 'utf-8');
     await vectorStore.addDocuments([{ pageContent: content, metadata: { file } }]);
   }
 
@@ -79,13 +100,16 @@ async function runRAG(jsonFiles) {
   }
 
   const summaryFile = `summary_${Date.now()}.json`;
-  fs.writeFileSync(path.join(STORAGE_DIR, summaryFile), JSON.stringify(summaries, null, 2));
+  fs.writeFileSync(path.join(tenantDir, summaryFile), JSON.stringify(summaries, null, 2));
   return summaryFile;
 }
 
 app.get('/', requiresAuth(), async (req, res) => {
   try {
-    const allFiles = fs.readdirSync(STORAGE_DIR).filter(f => f.endsWith('.json'));
+    const tenantId = getTenantId(req.oidc.user);
+    const tenantDir = getTenantDir(tenantId);
+    const allFiles = fs.readdirSync(tenantDir).filter(f => f.endsWith('.json'));
+    
     const roleKey = `${process.env.AUTH0_AUDIENCE}roles`;
     const roles = req.oidc.user[roleKey] || ['user'];
     const roleArray = Array.isArray(roles) ? roles : [roles];
@@ -93,9 +117,17 @@ app.get('/', requiresAuth(), async (req, res) => {
     let authorizedFiles = [];
     if (allFiles.length > 0) {
       const checkResult = await cerbos.checkResources({
-        principal: { id: req.oidc.user.sub, roles: roleArray },
+        principal: { 
+          id: req.oidc.user.sub, 
+          roles: roleArray,
+          attr: { tenantId }
+        },
         resources: allFiles.map(file => ({
-          resource: { kind: 'json_file', id: file },
+          resource: { 
+            kind: 'json_file', 
+            id: file,
+            attr: { tenantId }
+          },
           actions: ['read', 'update', 'delete']
         }))
       });
@@ -111,10 +143,17 @@ app.get('/', requiresAuth(), async (req, res) => {
       }).filter(f => f.canRead);
     }
 
-    // Ask Cerbos if this user can create AND if they can analyze
     const batchCheck = await cerbos.checkResource({
-      principal: { id: req.oidc.user.sub, roles: roleArray },
-      resource: { kind: 'json_file', id: 'system' },
+      principal: { 
+        id: req.oidc.user.sub, 
+        roles: roleArray,
+        attr: { tenantId }
+      },
+      resource: { 
+        kind: 'json_file', 
+        id: 'system',
+        attr: { tenantId }
+      },
       actions: ['create', 'analyze']
     });
 
@@ -130,17 +169,18 @@ app.get('/', requiresAuth(), async (req, res) => {
   }
 });
 
-// REMOVED hardcoded admin check. Now uses Cerbos.
 app.post('/analyze', requiresAuth(), async (req, res) => {
+  const tenantId = getTenantId(req.oidc.user);
   const isAllowed = await checkPerm(req.oidc.user, 'all_files', 'analyze');
   
   if (!isAllowed) {
-    return res.status(403).send('Forbidden: Cerbos policy denied analyze action');
+    return res.status(403).send('Forbidden');
   }
 
-  const files = fs.readdirSync(STORAGE_DIR).filter(f => f.endsWith('.json') && !f.includes('summary'));
+  const tenantDir = getTenantDir(tenantId);
+  const files = fs.readdirSync(tenantDir).filter(f => f.endsWith('.json') && !f.includes('summary'));
   try {
-    await runRAG(files);
+    await runRAG(tenantId, files);
     res.redirect('/');
   } catch (err) {
     res.status(500).send(err.message);
@@ -148,9 +188,10 @@ app.post('/analyze', requiresAuth(), async (req, res) => {
 });
 
 app.get('/download/:name', requiresAuth(), async (req, res) => {
+  const tenantId = getTenantId(req.oidc.user);
   const ok = await checkPerm(req.oidc.user, req.params.name, 'read');
   if (ok) {
-    const filePath = path.join(STORAGE_DIR, req.params.name);
+    const filePath = path.join(getTenantDir(tenantId), req.params.name);
     if (fs.existsSync(filePath)) return res.download(filePath);
     return res.status(404).send('File missing');
   }
@@ -159,8 +200,11 @@ app.get('/download/:name', requiresAuth(), async (req, res) => {
 
 app.post('/upload', requiresAuth(), async (req, res) => {
   if (!req.files || !req.files.jsonFile) return res.status(400).send('No file');
+  
+  const tenantId = getTenantId(req.oidc.user);
+  const tenantDir = getTenantDir(tenantId);
   const file = req.files.jsonFile;
-  const filePath = path.join(STORAGE_DIR, file.name);
+  const filePath = path.join(tenantDir, file.name);
   const action = fs.existsSync(filePath) ? 'update' : 'create';
 
   if (await checkPerm(req.oidc.user, file.name, action)) {
@@ -174,8 +218,9 @@ app.post('/upload', requiresAuth(), async (req, res) => {
 });
 
 app.get('/delete/:name', requiresAuth(), async (req, res) => {
+  const tenantId = getTenantId(req.oidc.user);
   if (await checkPerm(req.oidc.user, req.params.name, 'delete')) {
-    const filePath = path.join(STORAGE_DIR, req.params.name);
+    const filePath = path.join(getTenantDir(tenantId), req.params.name);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     return res.redirect('/');
   }

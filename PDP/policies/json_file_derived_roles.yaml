@@ -1,22 +1,41 @@
----
 apiVersion: api.cerbos.dev/v1
 derivedRoles:
   name: json_file_derived_roles
   definitions:
+    # Logic for being an owner (tenant matching)
+    - name: owner
+      parentRoles: ["admin", "member", "user"]
+      condition:
+        match:
+          expr: P.attr.tenantId == R.attr.tenantId
+
+    # Logic for admin: must be from the same tenant AND not sensitive
     - name: admin
       parentRoles: ["admin"]
       condition:
         match:
-          expr: "!R.id.matches('(?i)sensitive')"
+          all:
+            of:
+              - expr: P.attr.tenantId == R.attr.tenantId
+              - expr: "!R.id.matches('(?i)sensitive')"
 
+    # Logic for member: must be from the same tenant AND not sensitive
     - name: member
       parentRoles: ["member"]
       condition:
         match:
-          expr: "!R.id.matches('(?i)sensitive')"
+          all:
+            of:
+              - expr: P.attr.tenantId == R.attr.tenantId
+              - expr: "!R.id.matches('(?i)sensitive')"
 
+    # Logic for user: must be from the same tenant AND release file AND not sensitive
     - name: user
       parentRoles: ["user"]
       condition:
         match:
-          expr: "R.id.matches('(?i)release') && !R.id.matches('(?i)sensitive')"
+          all:
+            of:
+              - expr: P.attr.tenantId == R.attr.tenantId
+              - expr: "R.id.matches('(?i)release')"
+              - expr: "!R.id.matches('(?i)sensitive')"
