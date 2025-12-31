@@ -1,0 +1,40 @@
+%%{init: {'theme':'default'}}%%
+sequenceDiagram
+    autonumber
+    actor User as User (client1.com)
+    participant Auth0 as Auth0 (IDP)
+    participant PEP as Express Server (PEP)
+    participant Cerbos as Cerbos (PDP)
+    participant Storage as File System (Storage)
+    participant OpenAI as OpenAI (LLM/Embeddings)
+
+    Note over User, Auth0: Authentication Phase
+    User->>Auth0: Login Request
+    Auth0-->>User: ID Token (includes email & roles)
+    User->>PEP: HTTP Request (with Session/Token)
+
+    Note over PEP: Tenant Detection
+    PEP->>PEP: Extract tenantId (e.g., "client1.com")
+    
+    Note over PEP, Cerbos: Authorization Phase (ABAC/RBAC)
+    PEP->>Cerbos: checkResources (Principal: roles+tenantId, Resource: id+tenantId)
+    Note right of Cerbos: Match P.attr.tenantId == R.attr.tenantId
+    Cerbos-->>PEP: Allow / Deny Actions (read, delete, analyze, etc.)
+
+    alt is Authorized
+        Note over PEP, Storage: Resource Access
+        PEP->>Storage: Read files from /storage/client1.com/
+        Storage-->>PEP: Return Tenant JSON files
+        
+        opt Run AI RAG Analysis
+            PEP->>OpenAI: Send tenant-specific data for Embeddings
+            OpenAI-->>PEP: Return Vectors
+            PEP->>OpenAI: Query GPT-4o for Summary
+            OpenAI-->>PEP: Return Analysis
+            PEP->>Storage: Save summary to /storage/client1.com/
+        end
+        
+        PEP-->>User: Render Dashboard (only client1.com data)
+    else is Forbidden
+        PEP-->>User: 403 Forbidden
+    end
