@@ -1,67 +1,90 @@
 # JSON File Manager with Cerbos Authorization & Multi-Model AI RAG Analysis
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-v18+-green.svg)](https://nodejs.org/)
 
 ## Project Overview
 
-This open-source project demonstrates a production-ready **PEP + PDP** authorization pattern using **Cerbos** as the external Policy Decision Point.
+This open-source project demonstrates a production-ready **PEP + PDP** authorization pattern using **Cerbos** as the external Policy Decision Point, specifically designed for **Multi-Tenant SaaS** environments.
 ![](https://raw.githubusercontent.com/ChrisXHLeung/jsonRAG/refs/heads/main/Diagram/totalDiagram.png)
-
 It implements:
-- **RBAC** via user roles from Auth0
-- **ABAC** via derived roles, resource attributes, and conditions in Cerbos policies
+
+* 
+**RBAC** via user roles from Auth0. 
+
+
+* 
+**ABAC** via derived roles, resource attributes, and tenant-based conditions in Cerbos policies. 
+
+
+* **SaaS Tenant Isolation**: Automatic logical and physical isolation between organizations (e.g., `client1.com` and `client2.com`).
 
 Protected resources:
-1. **File resources** – Individual JSON files with per-file actions (`create`, `read`, `update`, `delete`)
-2. **AI model execution resources** – A configurable multi-model RAG workflow gated by a single `analyze` action, allowing control over expensive OpenAI calls across multiple models
+
+1. 
+**File resources** – Individual JSON files with per-file actions (`create`, `read`, `update`, `delete`) restricted by Tenant ID. 
+
+
+2. 
+**AI model execution resources** – A multi-model RAG workflow gated by the `analyze` action, ensuring expensive OpenAI calls are only accessible to authorized tenant administrators. 
 
 ![](https://raw.githubusercontent.com/ChrisXHLeung/jsonRAG/refs/heads/main/Diagram/workFlow.png)
-The application is a secure JSON file manager with an integrated **multi-model Retrieval-Augmented Generation** pipeline that analyzes all accessible files and generates summary reports.
+
+## Multi-Tenant Security Architecture
+
+The system ensures that users from different organizations are strictly isolated:
+![](https://raw.githubusercontent.com/ChrisXHLeung/jsonRAG/refs/heads/main/Diagram/sequenceDiagram.png)
+* **Logical Isolation (PDP)**: The PEP extracts the `tenantId` from the user's email domain. Every Cerbos request includes this attribute. The policies use **Derived Roles** to enforce that `P.attr.tenantId == R.attr.tenantId`.
+* **Physical Isolation (SaaS Storage)**: Files are stored in tenant-specific sub-directories (`/storage/{tenantId}/`). A user from `client1.com` can never access the file system layer of `client2.com`.
+* **Dynamic ABAC Rules**: Leveraging Cerbos to implement time-based restrictions and sensitive file filtering without changing application code.
 
 ## Project Structure
-![](https://raw.githubusercontent.com/ChrisXHLeung/jsonRAG/refs/heads/main/Diagram/sequenceDiagram.png)
+
 ```
 /
-├── PEP/                  # Main Node.js application (Policy Enforcement Point)
-│   ├── package.json
-│   ├── index.js          # Express server
-│   ├── views/
-│   ├── storage/          # Runtime directory for uploaded JSON files
-│   ├── .env.example
+├── PEP/                # Main Node.js application (Policy Enforcement Point)
+│   ├── index.js        # Express server with Multi-Tenant logic
+│   ├── Dockerfile      # Docker image configuration
+│   ├── views/          # UI rendering with AuthZ checks
+│   ├── storage/        # Physically isolated tenant sub-folders
 │   └── ...
-├── PDP/                  # Cerbos policy repository (Policy Decision Point)
+├── PDP/                # Cerbos policy repository (Policy Decision Point)
 │   ├── policies/
-│   │   ├── resource_json_file.yaml
-│   │   └── json_file_derived_roles.yaml
+│   │   ├── resource_json_file.yaml      # Multi-tenant resource rules
+│   │   └── json_file_derived_roles.yaml # ABAC tenant-matching logic
 │   └── ...
 └── README.md
-```
 
-The system requires both directories to function:
-- **PEP** runs the web application
-- **PDP** contains the Cerbos policies loaded by the Cerbos server
+```
 
 ## Key Features
 
-- Auth0 authentication
-- Fine-grained authorization via Cerbos PDP
-- Per-file permissions + protection of multi-model AI execution
-- Hybrid RBAC + ABAC
-- Dashboard with policy-filtered file list and actions
-- One-click **Multi-Model AI Batch Analysis** (requires `analyze` permission):
-  - Configurable embedding, analysis, and summary models
-  - Tunable RAG parameters (chunk size, overlap, top-k)
-  - Generates and saves a timestamped summary report
+* 
+**Auth0 Multi-Tenant Auth**: Identification via email domain. 
 
-## Prerequisites
 
-- Node.js ≥ 18
-- Docker (recommended for running Cerbos)
-- Auth0 tenant and application
-- OpenAI API key with access to your chosen models
+* 
+**SaaS Isolation**: Strict logical separation using Cerbos PDP. 
 
-## Auth0 Configuration (Required for Roles)
+
+* 
+**Hybrid RBAC + ABAC**: Roles from Auth0 combined with dynamic Cerbos attributes. 
+
+
+* **One-click Multi-Model AI Analysis**:
+* Only processes data belonging to the current user's tenant. 
+
+
+* Generates timestamped summary reports within the tenant's secure storage. 
+
+
+
+
+
+## Setup & Running
+
+This project is optimized for containerized deployment to ensure consistent environments.
+
+### Auth0 Configuration (Required for Roles)
 
 To pass user roles to the application, configure a **Post-Login Action** in Auth0:
 
@@ -81,8 +104,7 @@ exports.onExecutePostLogin = async (event, api) => {
 3. Deploy the Action and add it to the **Login** flow.
 
 This ensures roles are included in the ID token and accessible to the application.
-
-## Environment Variables
+### Environment Variables
 
 Copy `.env.example` to `.env` in the **PEP** directory and fill in values:
 
@@ -125,50 +147,50 @@ RAG_TOP_K=
 #RAG_TOP_K=5
 ```
 
-## Setup & Running
+### 1. Start Cerbos PDP
 
-1. **Start Cerbos server** (loads policies from PDP directory):
+Run the Cerbos server to load the multi-tenant policies:
 
 ```bash
 cd PDP
 docker run --rm --name cerbos \
   -p 3592:3592 -p 3593:3593 \
   -v $(pwd)/policies:/policies \
-  ghcr.io/cerbos/cerbos:latest server --config=$(pwd)/conf.yaml
+  ghcr.io/cerbos/cerbos:latest server --config=/policies/conf.yaml
+
 ```
 
-2. **Run the application**:
+### 2. Build and Run the App (PEP)
+
+Build the SaaS application image and run it with your environment variables:
 
 ```bash
-cd PEP
-npm install
-node index.js
+# Build the application image
+docker build -t json_rag .
+
+# Run the container
+docker run -d \
+  -p 3000:3000 \
+  --env-file=$(pwd)/.env \
+  --name cerbosRAG \
+  json_rag
+
 ```
 
-3. Open http://localhost:3000 and log in via Auth0.
 
-## Cerbos Policies
-
-Policies in `PDP/policies/` demonstrate:
-- Role-based access
-- Ownership and derived roles
-- Department restrictions
-- Control of the `analyze` action for AI execution
 
 ## Contributing
 
 Contributions welcome:
-- Enhanced Cerbos policies
-- Persistent vector stores
-- Additional RAG features
-- Storage backends
 
-Open an issue for major changes.
+* Advanced Cerbos multi-tenant policy templates.
+* Support for additional storage backends (S3/Minio).
+* Enhanced RAG visualization.
 
 ## License
 
-MIT License – see [LICENSE](LICENSE)
+MIT License – see [LICENSE](https://www.google.com/search?q=LICENSE)
 
 ---
 
-**A complete reference for PEP/PDP authorization protecting files and multi-model AI workloads.**
+**A complete reference for PEP/PDP authorization protecting multi-tenant SaaS assets and AI workloads.**
