@@ -1,0 +1,29 @@
+%%{init: {'theme':'default'}}%%
+sequenceDiagram
+    participant User as Tenant User
+    participant Cerbos as Cerbos (audit.json)
+    participant Z_Agent as Zabbix Agent
+    participant Script as cerbos_audit_stats.sh
+    participant Z_Server as Zabbix Server
+    participant Action as Action Engine (Webhook)
+    participant SRE as SRE / Platform Owner
+
+    User->>Cerbos: Unauthorized Action (Real Click)
+    Cerbos->>Cerbos: Log EFFECT_DENY + TenantID + CallID
+    
+    rect rgb(240, 240, 240)
+        Note over Z_Server, Script: Periodic Polling Interval
+        Z_Server->>Z_Agent: Request Key: cerbos.audit[tenant_01, deny]
+        Z_Agent->>Script: Run with Args: [tenant_01, deny]
+        Script->>Cerbos: Parse & Filter (Last 1hr, Unique CallIDs)
+        Script-->>Z_Agent: Return Integer (e.g., 4)
+        Z_Agent-->>Z_Server: Return Data
+    end
+
+    rect rgb(255, 220, 220)
+        Note over Z_Server: Evaluate: Value (4) > Threshold (3)
+        Z_Server->>Z_Server: Generate PROBLEM Event
+        Z_Server->>Action: Execute Action Policy
+        Action->>Action: Generate JSON Payload
+        Action-->>SRE: [Alert] Security Breach Detected (Tenant_01)
+    end
