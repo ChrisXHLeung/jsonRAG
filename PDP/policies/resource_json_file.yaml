@@ -7,7 +7,7 @@ resourcePolicy:
   rules:
     - actions: ["read", "create", "analyze"]
       effect: EFFECT_ALLOW
-      derivedRoles: ["admin"]
+      roles: ["admin"]
 
     - actions: ["update", "delete"]
       effect: EFFECT_ALLOW
