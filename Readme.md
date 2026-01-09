@@ -151,6 +151,10 @@ docker run -d \
 
 ```
 
+## For monitoring, use the command below to grant Zabbix access to the log file.
+setfacl -m m:r,u:zabbix:r /data/cerbos/audit/audit.json
+
+
 ## Contributing
 
 Contributions welcome:
