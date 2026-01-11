@@ -127,9 +127,9 @@ Run the Cerbos server to load the multi-tenant policies:
 cd PDP
 docker run -d --name cerbos \
   -p 3592:3592 -p 3593:3593 \
-  -v /data/cerbos/policies:/policies \
-  -v /data/cerbos/conf.yaml:/conf.yaml \
-  -v /data/cerbos/audit:/audit \
+  -v $(pwd)/policies:/policies \
+  -v $(pwd)/conf.yaml:/conf.yaml \
+  -v $(pwd)/audit:/audit \
   ghcr.io/cerbos/cerbos:latest server --config=/conf.yaml
 
 ```
