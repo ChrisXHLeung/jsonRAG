@@ -1,0 +1,18 @@
+# Proxmox API
+pve_api_url      = ""
+pve_token_id     = ""
+pve_token_secret = ""
+pve_node         = ""
+
+# VM 
+vm_id_start      = 
+vm_ip_address    = "a.b.c.d/e"
+vm_gateway       = "a.b.c.d"
+vm_dns_servers   = ["a.b.c.d"]
+vm_username      = "username"
+vm_password      = "password"
+
+# Proxmox SSH
+pve_ssh_username = "pveuser"
+pve_ssh_password = "pvepass"
+pve_ssh_node_address = "pveIP"
