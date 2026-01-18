@@ -40,16 +40,25 @@ const config = {
     scope: 'openid profile email'
   },
   session: {
-    rolling: false,
-    name: 'appSession',
-    cookie: {
-      transient: false,
-      sameSite: 'Lax'
-    }
+    rolling: true
   }
 };
 
 app.use(auth(config));
+
+/**
+ * Manually maintains a manifest file to bypass object storage directory caching issues.
+ */
+function updateFileList(tenantId) {
+  const tenantDir = getTenantDir(tenantId);
+  const files = fs.readdirSync(tenantDir).filter(f => 
+    f.endsWith('.json') && 
+    !f.startsWith('list_') && 
+    !f.includes('summary')
+  );
+  fs.writeFileSync(path.join(tenantDir, `list_${tenantId}.json`), JSON.stringify(files));
+  return files;
+}
 
 function getTenantId(user) {
   return user.email.split('@')[1];
@@ -69,16 +78,8 @@ async function checkPerm(user, resourceId, action) {
   
   try {
     const decision = await cerbos.checkResource({
-      principal: { 
-        id: user.sub, 
-        roles: roleArray,
-        attr: { tenantId } 
-      },
-      resource: { 
-        kind: 'json_file', 
-        id: resourceId,
-        attr: { tenantId }
-      },
+      principal: { id: user.sub, roles: roleArray, attr: { tenantId } },
+      resource: { kind: 'json_file', id: resourceId, attr: { tenantId } },
       actions: [action]
     });
     return decision.isAllowed(action);
@@ -109,6 +110,7 @@ async function runRAG(tenantId, jsonFiles) {
 
   const summaryFile = `summary_${Date.now()}.json`;
   fs.writeFileSync(path.join(tenantDir, summaryFile), JSON.stringify(summaries, null, 2));
+  updateFileList(tenantId);
   return summaryFile;
 }
 
@@ -116,8 +118,15 @@ app.get('/', requiresAuth(), async (req, res) => {
   try {
     const tenantId = getTenantId(req.oidc.user);
     const tenantDir = getTenantDir(tenantId);
-    const allFiles = fs.readdirSync(tenantDir).filter(f => f.endsWith('.json'));
-    
+    const listFilePath = path.join(tenantDir, `list_${tenantId}.json`);
+
+    let allFiles = [];
+    if (fs.existsSync(listFilePath)) {
+      allFiles = JSON.parse(fs.readFileSync(listFilePath, 'utf-8'));
+    } else {
+      allFiles = updateFileList(tenantId);
+    }
+
     const roleKey = `${process.env.AUTH0_AUDIENCE}roles`;
     const roles = req.oidc.user[roleKey] || ['user'];
     const roleArray = Array.isArray(roles) ? roles : [roles];
@@ -125,17 +134,9 @@ app.get('/', requiresAuth(), async (req, res) => {
     let authorizedFiles = [];
     if (allFiles.length > 0) {
       const checkResult = await cerbos.checkResources({
-        principal: { 
-          id: req.oidc.user.sub, 
-          roles: roleArray,
-          attr: { tenantId }
-        },
+        principal: { id: req.oidc.user.sub, roles: roleArray, attr: { tenantId } },
         resources: allFiles.map(file => ({
-          resource: { 
-            kind: 'json_file', 
-            id: file,
-            attr: { tenantId }
-          },
+          resource: { kind: 'json_file', id: file, attr: { tenantId } },
           actions: ['read', 'update', 'delete']
         }))
       });
@@ -152,16 +153,8 @@ app.get('/', requiresAuth(), async (req, res) => {
     }
 
     const batchCheck = await cerbos.checkResource({
-      principal: { 
-        id: req.oidc.user.sub, 
-        roles: roleArray,
-        attr: { tenantId }
-      },
-      resource: { 
-        kind: 'json_file', 
-        id: 'system',
-        attr: { tenantId }
-      },
+      principal: { id: req.oidc.user.sub, roles: roleArray, attr: { tenantId } },
+      resource: { kind: 'json_file', id: 'system', attr: { tenantId } },
       actions: ['create', 'analyze']
     });
 
@@ -178,32 +171,25 @@ app.get('/', requiresAuth(), async (req, res) => {
 });
 
 app.post('/analyze', requiresAuth(), async (req, res) => {
-  const tenantId = getTenantId(req.oidc.user);
   const isAllowed = await checkPerm(req.oidc.user, 'all_files', 'analyze');
-  
-  if (!isAllowed) {
-    return res.status(403).send('Forbidden');
+  if (!isAllowed) return res.status(403).send('Forbidden');
+
+  const tenantId = getTenantId(req.oidc.user);
+  const tenantDir = getTenantDir(tenantId);
+  const listFilePath = path.join(tenantDir, `list_${tenantId}.json`);
+  let files = [];
+  if (fs.existsSync(listFilePath)) {
+    files = JSON.parse(fs.readFileSync(listFilePath, 'utf-8')).filter(f => !f.includes('summary'));
+  } else {
+    files = updateFileList(tenantId).filter(f => !f.includes('summary'));
   }
 
-  const tenantDir = getTenantDir(tenantId);
-  const files = fs.readdirSync(tenantDir).filter(f => f.endsWith('.json') && !f.includes('summary'));
   try {
     await runRAG(tenantId, files);
     res.redirect('/');
   } catch (err) {
     res.status(500).send(err.message);
   }
-});
-
-app.get('/download/:name', requiresAuth(), async (req, res) => {
-  const tenantId = getTenantId(req.oidc.user);
-  const ok = await checkPerm(req.oidc.user, req.params.name, 'read');
-  if (ok) {
-    const filePath = path.join(getTenantDir(tenantId), req.params.name);
-    if (fs.existsSync(filePath)) return res.download(filePath);
-    return res.status(404).send('File missing');
-  }
-  res.status(403).send('Forbidden');
 });
 
 app.post('/upload', requiresAuth(), async (req, res) => {
@@ -218,6 +204,7 @@ app.post('/upload', requiresAuth(), async (req, res) => {
   if (await checkPerm(req.oidc.user, file.name, action)) {
     file.mv(filePath, err => {
       if (err) return res.status(500).send(err);
+      updateFileList(tenantId);
       res.redirect('/');
     });
   } else {
@@ -230,9 +217,21 @@ app.get('/delete/:name', requiresAuth(), async (req, res) => {
   if (await checkPerm(req.oidc.user, req.params.name, 'delete')) {
     const filePath = path.join(getTenantDir(tenantId), req.params.name);
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    updateFileList(tenantId);
     return res.redirect('/');
   }
   res.status(403).send('Denied');
+});
+
+app.get('/download/:name', requiresAuth(), async (req, res) => {
+  const ok = await checkPerm(req.oidc.user, req.params.name, 'read');
+  if (ok) {
+    const tenantId = getTenantId(req.oidc.user);
+    const filePath = path.join(getTenantDir(tenantId), req.params.name);
+    if (fs.existsSync(filePath)) return res.download(filePath);
+    return res.status(404).send('File missing');
+  }
+  res.status(403).send('Forbidden');
 });
 
 app.listen(3000, () => console.log('Server running on 3000'));
