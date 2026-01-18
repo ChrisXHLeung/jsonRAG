@@ -40,7 +40,6 @@ const config = {
     scope: 'openid profile email'
   },
   session: {
-    strategy: 'cookie', 
     rolling: true,
     absoluteDuration: 3600 * 24
   }
