@@ -46,6 +46,12 @@ const config = {
 
 app.use(auth(config));
 
+// Helper to write the manifest file
+function saveManifest(tenantId, files) {
+  const listPath = path.join(getTenantDir(tenantId), `list_${tenantId}.json`);
+  fs.writeFileSync(listPath, JSON.stringify(files));
+}
+
 function getTenantId(user) {
   return user.email.split('@')[1];
 }
@@ -54,15 +60,6 @@ function getTenantDir(tenantId) {
   const dir = path.join(STORAGE_ROOT, tenantId);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
-}
-
-function getFreshFileList(tenantId) {
-  const tenantDir = getTenantDir(tenantId);
-  return fs.readdirSync(tenantDir).filter(f => 
-    f.endsWith('.json') && 
-    !f.startsWith('list_') && 
-    !f.includes('summary')
-  );
 }
 
 async function checkPerm(user, resourceId, action) {
@@ -84,37 +81,17 @@ async function checkPerm(user, resourceId, action) {
   }
 }
 
-async function runRAG(tenantId, jsonFiles) {
-  const tenantDir = getTenantDir(tenantId);
-  const embeddings = new OpenAIEmbeddings({ openAIApiKey: process.env.OPENAI_API_KEY });
-  const vectorStore = new MemoryVectorStore(embeddings);
-
-  for (const file of jsonFiles) {
-    const content = fs.readFileSync(path.join(tenantDir, file), 'utf-8');
-    await vectorStore.addDocuments([{ pageContent: content, metadata: { file } }]);
-  }
-
-  const model = new ChatOpenAI({ modelName: 'gpt-4o', temperature: 0 });
-  const chain = RetrievalQAChain.fromLLM(model, vectorStore.asRetriever());
-
-  const summaries = [];
-  for (const file of jsonFiles) {
-    const res = await chain.invoke({ query: "Summarize this data concisely." });
-    summaries.push({ file, summary: res.text || res.answer });
-  }
-
-  const summaryFile = `summary_${Date.now()}.json`;
-  fs.writeFileSync(path.join(tenantDir, summaryFile), JSON.stringify(summaries, null, 2));
-  return summaryFile;
-}
-
-
-
+// --- Main Route: Read ONLY the manifest file ---
 app.get('/', requiresAuth(), async (req, res) => {
   try {
     const tenantId = getTenantId(req.oidc.user);
+    const listPath = path.join(getTenantDir(tenantId), `list_${tenantId}.json`);
     
-    const allFiles = getFreshFileList(tenantId);
+    let allFiles = [];
+    // Only read the manifest file to avoid folder cache issues
+    if (fs.existsSync(listPath)) {
+      allFiles = JSON.parse(fs.readFileSync(listPath, 'utf8'));
+    }
 
     const roleKey = `${process.env.AUTH0_AUDIENCE}roles`;
     const roles = req.oidc.user[roleKey] || ['user'];
@@ -159,33 +136,24 @@ app.get('/', requiresAuth(), async (req, res) => {
   }
 });
 
-app.post('/analyze', requiresAuth(), async (req, res) => {
-  const isAllowed = await checkPerm(req.oidc.user, 'all_files', 'analyze');
-  if (!isAllowed) return res.status(403).send('Forbidden');
-
-  const tenantId = getTenantId(req.oidc.user);
-  const files = getFreshFileList(tenantId).filter(f => !f.includes('summary'));
-
-  try {
-    await runRAG(tenantId, files);
-    res.redirect('/');
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-});
-
 app.post('/upload', requiresAuth(), async (req, res) => {
   if (!req.files || !req.files.jsonFile) return res.status(400).send('No file');
-  
   const tenantId = getTenantId(req.oidc.user);
-  const tenantDir = getTenantDir(tenantId);
   const file = req.files.jsonFile;
-  const filePath = path.join(tenantDir, file.name);
+  const filePath = path.join(getTenantDir(tenantId), file.name);
   const action = fs.existsSync(filePath) ? 'update' : 'create';
 
   if (await checkPerm(req.oidc.user, file.name, action)) {
     file.mv(filePath, err => {
       if (err) return res.status(500).send(err);
+      
+      // Update list
+      const listPath = path.join(getTenantDir(tenantId), `list_${tenantId}.json`);
+      let files = fs.existsSync(listPath) ? JSON.parse(fs.readFileSync(listPath, 'utf8')) : [];
+      if (!files.includes(file.name)) {
+        files.push(file.name);
+        saveManifest(tenantId, files);
+      }
       res.redirect('/');
     });
   } else {
@@ -197,23 +165,18 @@ app.get('/delete/:name', requiresAuth(), async (req, res) => {
   const tenantId = getTenantId(req.oidc.user);
   if (await checkPerm(req.oidc.user, req.params.name, 'delete')) {
     const filePath = path.join(getTenantDir(tenantId), req.params.name);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    
+    // Update list
+    const listPath = path.join(getTenantDir(tenantId), `list_${tenantId}.json`);
+    if (fs.existsSync(listPath)) {
+      let files = JSON.parse(fs.readFileSync(listPath, 'utf8'));
+      files = files.filter(f => f !== req.params.name);
+      saveManifest(tenantId, files);
     }
     return res.redirect('/');
   }
   res.status(403).send('Denied');
-});
-
-app.get('/download/:name', requiresAuth(), async (req, res) => {
-  const ok = await checkPerm(req.oidc.user, req.params.name, 'read');
-  if (ok) {
-    const tenantId = getTenantId(req.oidc.user);
-    const filePath = path.join(getTenantDir(tenantId), req.params.name);
-    if (fs.existsSync(filePath)) return res.download(filePath);
-    return res.status(404).send('File missing');
-  }
-  res.status(403).send('Forbidden');
 });
 
 app.listen(3000, () => console.log('Server running on 3000'));
