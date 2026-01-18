@@ -38,7 +38,7 @@ const config = {
     response_type: 'code',
     audience: process.env.AUTH0_AUDIENCE,
     scope: 'openid profile email'
-  }，
+  },
   session: {
     strategy: 'cookie', 
     rolling: true
