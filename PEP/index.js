@@ -56,20 +56,13 @@ function getTenantDir(tenantId) {
   return dir;
 }
 
-/**
- * Force-syncs the directory state to a manifest file.
- * This bypasses directory listing caches in distributed filesystems.
- */
-function updateFileList(tenantId) {
+function getFreshFileList(tenantId) {
   const tenantDir = getTenantDir(tenantId);
-  const files = fs.readdirSync(tenantDir).filter(f => 
+  return fs.readdirSync(tenantDir).filter(f => 
     f.endsWith('.json') && 
     !f.startsWith('list_') && 
     !f.includes('summary')
   );
-  const listPath = path.join(tenantDir, `list_${tenantId}.json`);
-  fs.writeFileSync(listPath, JSON.stringify(files));
-  return files;
 }
 
 async function checkPerm(user, resourceId, action) {
@@ -112,7 +105,6 @@ async function runRAG(tenantId, jsonFiles) {
 
   const summaryFile = `summary_${Date.now()}.json`;
   fs.writeFileSync(path.join(tenantDir, summaryFile), JSON.stringify(summaries, null, 2));
-  updateFileList(tenantId);
   return summaryFile;
 }
 
@@ -121,19 +113,8 @@ async function runRAG(tenantId, jsonFiles) {
 app.get('/', requiresAuth(), async (req, res) => {
   try {
     const tenantId = getTenantId(req.oidc.user);
-    const tenantDir = getTenantDir(tenantId);
-    const listFilePath = path.join(tenantDir, `list_${tenantId}.json`);
-
-    let allFiles = [];
     
-    // Aggressive Read: Attempt to read the manifest directly to bypass folder-level caching
-    try {
-      const data = fs.readFileSync(listFilePath, 'utf-8');
-      allFiles = JSON.parse(data);
-    } catch (readError) {
-      // Fallback to manual scan if manifest is missing or unreadable
-      allFiles = updateFileList(tenantId);
-    }
+    const allFiles = getFreshFileList(tenantId);
 
     const roleKey = `${process.env.AUTH0_AUDIENCE}roles`;
     const roles = req.oidc.user[roleKey] || ['user'];
@@ -183,15 +164,7 @@ app.post('/analyze', requiresAuth(), async (req, res) => {
   if (!isAllowed) return res.status(403).send('Forbidden');
 
   const tenantId = getTenantId(req.oidc.user);
-  const tenantDir = getTenantDir(tenantId);
-  const listFilePath = path.join(tenantDir, `list_${tenantId}.json`);
-  
-  let files = [];
-  try {
-    files = JSON.parse(fs.readFileSync(listFilePath, 'utf-8')).filter(f => !f.includes('summary'));
-  } catch (e) {
-    files = updateFileList(tenantId).filter(f => !f.includes('summary'));
-  }
+  const files = getFreshFileList(tenantId).filter(f => !f.includes('summary'));
 
   try {
     await runRAG(tenantId, files);
@@ -213,7 +186,6 @@ app.post('/upload', requiresAuth(), async (req, res) => {
   if (await checkPerm(req.oidc.user, file.name, action)) {
     file.mv(filePath, err => {
       if (err) return res.status(500).send(err);
-      updateFileList(tenantId);
       res.redirect('/');
     });
   } else {
@@ -227,7 +199,6 @@ app.get('/delete/:name', requiresAuth(), async (req, res) => {
     const filePath = path.join(getTenantDir(tenantId), req.params.name);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
-      updateFileList(tenantId);
     }
     return res.redirect('/');
   }
