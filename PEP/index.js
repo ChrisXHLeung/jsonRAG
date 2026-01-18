@@ -46,20 +46,6 @@ const config = {
 
 app.use(auth(config));
 
-/**
- * Manually maintains a manifest file to bypass object storage directory caching issues.
- */
-function updateFileList(tenantId) {
-  const tenantDir = getTenantDir(tenantId);
-  const files = fs.readdirSync(tenantDir).filter(f => 
-    f.endsWith('.json') && 
-    !f.startsWith('list_') && 
-    !f.includes('summary')
-  );
-  fs.writeFileSync(path.join(tenantDir, `list_${tenantId}.json`), JSON.stringify(files));
-  return files;
-}
-
 function getTenantId(user) {
   return user.email.split('@')[1];
 }
@@ -68,6 +54,22 @@ function getTenantDir(tenantId) {
   const dir = path.join(STORAGE_ROOT, tenantId);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+/**
+ * Force-syncs the directory state to a manifest file.
+ * This bypasses directory listing caches in distributed filesystems.
+ */
+function updateFileList(tenantId) {
+  const tenantDir = getTenantDir(tenantId);
+  const files = fs.readdirSync(tenantDir).filter(f => 
+    f.endsWith('.json') && 
+    !f.startsWith('list_') && 
+    !f.includes('summary')
+  );
+  const listPath = path.join(tenantDir, `list_${tenantId}.json`);
+  fs.writeFileSync(listPath, JSON.stringify(files));
+  return files;
 }
 
 async function checkPerm(user, resourceId, action) {
@@ -114,6 +116,8 @@ async function runRAG(tenantId, jsonFiles) {
   return summaryFile;
 }
 
+
+
 app.get('/', requiresAuth(), async (req, res) => {
   try {
     const tenantId = getTenantId(req.oidc.user);
@@ -121,9 +125,13 @@ app.get('/', requiresAuth(), async (req, res) => {
     const listFilePath = path.join(tenantDir, `list_${tenantId}.json`);
 
     let allFiles = [];
-    if (fs.existsSync(listFilePath)) {
-      allFiles = JSON.parse(fs.readFileSync(listFilePath, 'utf-8'));
-    } else {
+    
+    // Aggressive Read: Attempt to read the manifest directly to bypass folder-level caching
+    try {
+      const data = fs.readFileSync(listFilePath, 'utf-8');
+      allFiles = JSON.parse(data);
+    } catch (readError) {
+      // Fallback to manual scan if manifest is missing or unreadable
       allFiles = updateFileList(tenantId);
     }
 
@@ -177,10 +185,11 @@ app.post('/analyze', requiresAuth(), async (req, res) => {
   const tenantId = getTenantId(req.oidc.user);
   const tenantDir = getTenantDir(tenantId);
   const listFilePath = path.join(tenantDir, `list_${tenantId}.json`);
+  
   let files = [];
-  if (fs.existsSync(listFilePath)) {
+  try {
     files = JSON.parse(fs.readFileSync(listFilePath, 'utf-8')).filter(f => !f.includes('summary'));
-  } else {
+  } catch (e) {
     files = updateFileList(tenantId).filter(f => !f.includes('summary'));
   }
 
@@ -216,8 +225,10 @@ app.get('/delete/:name', requiresAuth(), async (req, res) => {
   const tenantId = getTenantId(req.oidc.user);
   if (await checkPerm(req.oidc.user, req.params.name, 'delete')) {
     const filePath = path.join(getTenantDir(tenantId), req.params.name);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    updateFileList(tenantId);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      updateFileList(tenantId);
+    }
     return res.redirect('/');
   }
   res.status(403).send('Denied');
