@@ -41,7 +41,8 @@ const config = {
   },
   session: {
     strategy: 'cookie', 
-    rolling: true
+    rolling: true,
+    absoluteDuration: 3600 * 24
   }
 };
 
