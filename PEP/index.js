@@ -40,8 +40,12 @@ const config = {
     scope: 'openid profile email'
   },
   session: {
-    rolling: true,
-    absoluteDuration: 3600 * 24
+    rolling: false,
+    name: 'appSession',
+    cookie: {
+      transient: false,
+      sameSite: 'Lax'
+    }
   }
 };
 
