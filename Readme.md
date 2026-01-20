@@ -154,7 +154,8 @@ docker run -d \
 ## For monitoring, use the command below to grant Zabbix access to the log file.
 setfacl -m m:r,u:zabbix:r /data/cerbos/audit/audit.json
 
-## For autodeployment, use terraform, you can [learn more](https://github.com/ChrisXHLeung/jsonRAG/blob/main/Terraform/README.md) 
+## For autodeployment, use terraform
+You can [learn more](https://github.com/ChrisXHLeung/jsonRAG/blob/main/Terraform/README.md) 
 
 
 ## Contributing
