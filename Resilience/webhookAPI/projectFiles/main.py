@@ -18,7 +18,7 @@ logging.basicConfig(
 app = FastAPI()
 
 # Security Token
-API_KEY_CREDIT = " "#"your_api_key_here"
+API_KEY_CREDIT = " " # Replace with your actual API key
 
 # Mapping IDs to script paths
 SCRIPT_MAP = {

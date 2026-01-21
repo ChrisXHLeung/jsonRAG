@@ -2,7 +2,7 @@ resource "proxmox_virtual_environment_vm" "ubuntu_vm" {
   count     = 1
   node_name = var.pve_node
   vm_id     = var.vm_id_start + count.index
-  name      = "authNginx"
+  name      = "nginx2.auth"
   tags      = ["terraform" , "Resilience"]
 
   clone {
@@ -23,9 +23,9 @@ resource "proxmox_virtual_environment_vm" "ubuntu_vm" {
   }
 
   initialization {
-    datastore_id = "<datastore_id>"
+    datastore_id = "pveData"
     
-    vendor_data_file_id = proxmox_virtual_environment_file.init_Nginx.id
+    vendor_data_file_id = proxmox_virtual_environment_file.init_Nginx2.id
 
     user_account {
       username = var.vm_username

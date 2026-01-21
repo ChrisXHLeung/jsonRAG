@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # --- Configuration Section ---
-#REMOTE_NAME=""
-#BUCKET_NAME=""
-#MOUNT_PATH="/mnt/rag_data"
-#MINIO_URL=""
-#ACCESS_KEY=""
-#SECRET_KEY=""
-#RCLONE_BIN=$(which rclone || echo "/usr/bin/rclone")
-#CONF_FILE="/root/.config/rclone/rclone.conf"
+REMOTE_NAME=<Your_Rclone_Remote_Name>
+BUCKET_NAME=<Your_Bucket_Name>
+MOUNT_PATH=</path/to/mount/point>
+MINIO_URL=<Your_MinIO_Server_URL>
+ACCESS_KEY=<Your_Access_Key>
+SECRET_KEY=<Your_Secret_Key>
+RCLONE_BIN=$(which rclone || echo "/usr/bin/rclone")
+CONF_FILE="/root/.config/rclone/rclone.conf"
 # ----------------------------
 
 # 1. Ensure rclone is installed

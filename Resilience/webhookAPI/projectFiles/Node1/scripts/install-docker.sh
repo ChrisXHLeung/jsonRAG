@@ -16,11 +16,3 @@ apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin do
 usermod -aG docker chris
 
 docker network create Portainer
-docker run -d \
-  -p 19000:9000 \
-  --name=Portainer \
-  --restart=always \
-  --network=Portainer \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v portainer_data:/data \
-  portainer/portainer-ce:alpine

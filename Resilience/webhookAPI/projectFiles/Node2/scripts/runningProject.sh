@@ -5,7 +5,6 @@ cd /data
 # Clone the repository
 git clone https://github.com/ChrisXHLeung/jsonRAG.git
 cd jsonRAG
-/bin/mount -t nfs 192.168.10.201:/data/jsonRAG_NFS /data/jsonRAG/PEP/storage
 # create network
 docker network create jsonRAG
 # run PDP server

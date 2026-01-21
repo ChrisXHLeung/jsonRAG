@@ -31,10 +31,15 @@ write_files:
     encoding: b64
     content: ${Node2_zip_b64}
 
-  - path: /opt/init/Nginx.zip
+  - path: /opt/init/Nginx1.zip
     permissions: '0644'
     encoding: b64
-    content: ${Nginx_zip_b64}
+    content: ${Nginx1_zip_b64}
+
+  - path: /opt/init/Nginx2.zip
+    permissions: '0644'
+    encoding: b64
+    content: ${Nginx2_zip_b64}
 
   - path: /opt/init/jsonRAGReBuild1.sh
     permissions: '0755'
@@ -46,10 +51,20 @@ write_files:
     encoding: b64
     content: ${jsonRAGRebuild2_b64}
 
+  - path: /opt/init/ssl.zip
+    permissions: '0644'
+    encoding: b64
+    content: ${ssl_zip_b64}
+
+  - path: /opt/init/destroyAll.sh
+    permissions: '0755'
+    encoding: b64
+    content: ${destroyAll_b64}
 runcmd:
   - cd /opt/init
   - chmod +x *.sh
   - ./init.sh > /var/log/init.log 2>&1
+  - ./acmeSSL.sh >> /var/log/init.log 2>&1
   - ./terraformDeploy.sh >> /var/log/init.log 2>&1
   - ./webhookDeploy.sh >> /var/log/init.log 2>&1
   - echo "All scripts completed at $(date)" >> /var/log/init.log 2>&1

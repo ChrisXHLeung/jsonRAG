@@ -3,7 +3,7 @@ set -e
 
 apt-get update
 apt-get install -y \
-  rclone \
+  socat \
   net-tools \
   iftop \
   tcpdump \
@@ -38,11 +38,10 @@ sed -i 's/^ServerActive=/# ServerActive=/g' /etc/zabbix/zabbix_agentd.conf
 sed -i 's/^Server=/# Server=/g' /etc/zabbix/zabbix_agentd.conf
 sed -i 's/^Hostname=/# Hostname=/g' /etc/zabbix/zabbix_agentd.conf
 cat >> /etc/zabbix/zabbix_agentd.conf << EOF
-Server= <your_zabbix_server_ip_or_hostname>
-ServerActive= <your_zabbix_server_ip_or_hostname>
-ListenPort= <Your_desired_port>
+Server=<your_zabbix_server_ip_or_hostname>
+ServerActive=<your_zabbix_server_ip_or_hostname>
+ListenPort=<Your_desired_port>
 EOF
-cp /opt/init/cerbos.audit.conf /etc/zabbix/zabbix_agentd.d/cerbos.audit.conf
 # Restart Zabbix Agent
 systemctl restart zabbix-agent
 systemctl enable zabbix-agent

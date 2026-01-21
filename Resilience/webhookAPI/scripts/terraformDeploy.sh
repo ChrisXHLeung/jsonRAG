@@ -10,11 +10,8 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashi
 apt update
 apt-get install terraform -y
 mkdir -p /data/sshkeys
-# Add your public SSH key here
 cat > /data/sshkeys/id_ed25519.pub <<'EOF'
------BEGIN OPENSSH PUBLIC KEY-----
-
------END OPENSSH PUBLIC KEY-----
+<Your_Public_SSH_Key_Content>
 EOF
 # Node1
 export HOME=/root
@@ -35,12 +32,21 @@ rm Node2.zip
 terraform init
 terraform plan
 terraform apply -auto-approve
-# Nginx
-mkdir -p /data/jsonRAG/Nginx
-cp /opt/init/Nginx.zip /data/jsonRAG/Nginx/Nginx.zip
-cd /data/jsonRAG/Nginx
-unzip Nginx.zip
-rm Nginx.zip
+# Nginx1
+mkdir -p /data/jsonRAG/Nginx1
+cp /opt/init/Nginx1.zip /data/jsonRAG/Nginx1/Nginx1.zip
+cd /data/jsonRAG/Nginx1
+unzip Nginx1.zip
+rm Nginx1.zip
+terraform init
+terraform plan
+terraform apply -auto-approve
+# Nginx2
+mkdir -p /data/jsonRAG/Nginx2
+cp /opt/init/Nginx2.zip /data/jsonRAG/Nginx2/Nginx2.zip
+cd /data/jsonRAG/Nginx2
+unzip Nginx2.zip
+rm Nginx2.zip
 terraform init
 terraform plan
 terraform apply -auto-approve
