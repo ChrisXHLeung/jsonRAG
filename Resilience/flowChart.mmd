@@ -1,0 +1,38 @@
+%%{init: {"theme":"base"}}%%
+graph TD
+    subgraph "Proxmox VE Cluster"
+        API_VM["API VM (Management Controller)"]
+        
+        subgraph "Production Cluster"
+            LB_VIP["Virtual IP (Keepalived)"]
+            Nginx1["Nginx HA 1"]
+            Nginx2["Nginx HA 2"]
+            W1["Worker Node 1 (Computing)"]
+            W2["Worker Node 2 (Computing)"]
+        end
+    end
+
+    OBJ[("Object Storage (Data)")]
+    
+    subgraph "Security Monitoring"
+        Cerbos["Cerbos (Audit Engine)"]
+        Zabbix["Zabbix Server"]
+    end
+
+    %% Networking
+    LB_VIP --> Nginx1 & Nginx2
+    Nginx1 & Nginx2 -- "Reverse Proxy" --> W1 & W2
+    W1 & W2 -- "Read/Write" --> OBJ
+
+    %% Detection Path
+    W1 & W2 -- "Auth/Audit Logs" --> Cerbos
+    Cerbos -- "Security Events" --> Zabbix
+
+    %% Remediation Path (The Self-Healing)
+    Zabbix -- "1. Trigger Webhook" --> API_VM
+    API_VM -- "2. Terraform Rebuild Target" --> W1
+    API_VM -- "2. Terraform Rebuild Target" --> W2
+
+    style API_VM fill:#f96,stroke:#333,stroke-width:2px
+    style W1 fill:#bbf,stroke:#333
+    style W2 fill:#bbf,stroke:#333

@@ -1,0 +1,15 @@
+%%{init: {"theme":"base"}}%%
+sequenceDiagram
+    participant W as Worker Node (Computing)
+    participant C as Cerbos (Audit)
+    participant Z as Zabbix (Monitor)
+    participant A as API VM (Controller)
+    participant P as Proxmox VE (Hypervisor)
+
+    W->>C: Request Authorization
+    C->>Z: Logs Violation/Audit Record
+    Z->>A: Webhook: "Worker_01 is compromised"
+    Note over A: WebhookAPI processes Logic
+    A->>P: Terraform: Destroy & Recreate Worker_01
+    P-->>W: Spin up fresh instance
+    Note over W: Auto-mount Object Storage
